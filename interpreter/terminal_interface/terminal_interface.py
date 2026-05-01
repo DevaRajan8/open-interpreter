@@ -27,6 +27,32 @@ from .utils.cli_input import cli_input
 from .utils.display_output import display_output
 from .utils.find_image_path import find_image_path
 
+
+class MagicCommandCompleter:
+    """Readline completer for Open Interpreter magic commands."""
+    
+    MAGIC_COMMANDS = [
+        "%help", "%verbose", "%auto_run", "%reset",
+        "%save_message", "%load_message", "%undo",
+        "%tokens", "%info", "%jupyter", "%markdown", "%%",
+    ]
+    
+    def __init__(self):
+        self.matches = []
+    
+    def __call__(self, text, state):
+        if state == 0:
+            # First call - generate all matches
+            if text.startswith("%"):
+                self.matches = [cmd for cmd in self.MAGIC_COMMANDS if cmd.startswith(text)]
+            else:
+                self.matches = []
+        
+        # Return next match
+        if state < len(self.matches):
+            return self.matches[state]
+        return None
+
 # Add examples to the readline history
 examples = [
     "How many files are on my desktop?",
@@ -39,6 +65,13 @@ random.shuffle(examples)
 try:
     for example in examples:
         readline.add_history(example)
+    
+    # Register the magic command completer
+    completer = MagicCommandCompleter()
+    readline.set_completer(completer)
+    # Don't include % in delimiters so %help stays as one token
+    readline.set_completer_delims(" \t")
+    readline.parse_and_bind("tab: complete")
 except:
     # If they don't have readline, that's fine
     pass
@@ -93,13 +126,19 @@ def terminal_interface(interpreter, message):
             else:
                 ### This is the primary input for Open Interpreter.
                 try:
+                    # Re-register completer before every input call
+                    try:
+                        readline.set_completer(completer.__call__)
+                        readline.set_completer_delims(" \t\n")
+                        readline.parse_and_bind("tab: complete")
+                    except:
+                        pass
                     message = (
                         cli_input("> ").strip()
                         if interpreter.multi_line
                         else input("> ").strip()
                     )
                 except (KeyboardInterrupt, EOFError):
-                    # Treat Ctrl-D on an empty line the same as Ctrl-C by exiting gracefully
                     interpreter.display_message("\n\n`Exiting...`")
                     raise KeyboardInterrupt
 
